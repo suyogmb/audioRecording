@@ -19,6 +19,9 @@ async function requestAndroidPermissions() {
 async function requestIOSPermission() {
   try {
     const allowed = await AudioRecorderModule.requestPermission();
+    if (!allowed) {
+  throw new Error('Permission denied');
+}
     return allowed;
   } catch (e) {
     return false;
