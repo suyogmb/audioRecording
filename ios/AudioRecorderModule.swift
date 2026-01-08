@@ -1,5 +1,6 @@
 
 import Foundation
+import React
 import AVFoundation
 
 @objc(AudioRecorderModule)
@@ -8,28 +9,49 @@ class AudioRecorderModule: NSObject {
     private var player: AVAudioPlayer?      // ← declare player here
     private var audioSession = AVAudioSession.sharedInstance()
 
-    @objc
-    func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock,
-                           rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let status = audioSession.recordPermission
-        print("DEBUG: recordPermission status prior = \(status.rawValue)")
+@objc
+func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock,
+                       rejecter reject: @escaping RCTPromiseRejectBlock) {
+    // check current state first
+    let perm = audioSession.recordPermission
+    print("DEBUG: current recordPermission (raw) = \(perm.rawValue)")
+
+    switch perm {
+    case .granted:
+        resolve(true)
+    case .denied:
+        resolve(false)
+    case .undetermined:
         audioSession.requestRecordPermission { granted in
-            print("DEBUG: requestRecordPermission granted = \(granted)")
+            print("DEBUG: requestRecordPermission callback granted = \(granted)")
             DispatchQueue.main.async {
                 resolve(granted)
             }
         }
+    @unknown default:
+        resolve(false)
     }
+}
 
-    @objc
+  @objc
     func startRecording(_ filename: NSString,
                         resolver resolve: @escaping RCTPromiseResolveBlock,
                         rejecter reject: @escaping RCTPromiseRejectBlock) {
+        // Check permission first — don't activate session before permission
+        let perm = audioSession.recordPermission
+        print("DEBUG: recordPermission at startRecording = \(perm.rawValue)")
+        if perm != .granted {
+            reject("permission_error", "Permission not granted by AVAudioSession", nil)
+            return
+        }
+
         do {
-            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+            try audioSession.setCategory(.playAndRecord,
+                               mode: .default,
+                               options: [.defaultToSpeaker, .allowBluetooth])
             try audioSession.setActive(true)
 
-            let docs = FileManager.default.temporaryDirectory
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             let fileURL = docs.appendingPathComponent(filename as String)
 
             let settings: [String: Any] = [
@@ -41,13 +63,17 @@ class AudioRecorderModule: NSObject {
 
             recorder = try AVAudioRecorder(url: fileURL, settings: settings)
             recorder?.prepareToRecord()
-            if recorder?.record() == true {
-                resolve(fileURL.path)
-            } else {
-                reject("start_error", "Failed to start recording", nil)
+
+            DispatchQueue.main.async {
+                if self.recorder?.record() == true {
+                    resolve(fileURL.path)
+                } else {
+                    reject("start_error", "Failed to start recording", nil)
+                }
             }
+
         } catch let error {
-            reject("permission_error", error.localizedDescription, error)
+            reject("start_error", error.localizedDescription, error)
         }
     }
 

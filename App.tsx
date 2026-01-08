@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, Button, Text, StyleSheet, Platform, NativeModules } from 'react-native';
+import { View, Button, Text, StyleSheet, Platform } from 'react-native';
 import AudioRecorder from './src/audio';
 import { check, Permission, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
-const { AudioRecorderModule } = NativeModules;
+
 export default function App() {
   const [recording, setRecording] = useState(false);
   const [recordedPath, setRecordedPath] = useState(null);
@@ -19,6 +19,7 @@ async function requestMicPermission() {
   }
 
   const status = await check(permission);
+  console.log('Microphone permission status:', status);
 
   if (status === RESULTS.GRANTED) {
     return true;
@@ -39,6 +40,8 @@ async function requestMicPermission() {
       return;
     }
       const path = await AudioRecorder.startRecording('test_record.m4a');
+      console.log('Recording started, saving to:', path);
+      
       setRecordedPath(path);
       setRecording(true);
     } catch (e) {
